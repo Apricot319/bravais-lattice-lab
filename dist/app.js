@@ -493,13 +493,28 @@
     },null)?.atom||null;
   }
 
-  function screenPath(points,color,width=1.5,dash=[5,5]) {
-    ctx.save();ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dash);ctx.beginPath();
-    points.forEach((p,index)=>index?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();ctx.restore();
+  function drawGlowPath(trace) {
+    const layers=[
+      {width:11,color:'rgba(221,91,74,.15)',blur:18},
+      {width:5,color:'rgba(234,105,86,.38)',blur:10},
+      {width:1.7,color:'rgba(255,247,229,.98)',blur:4}
+    ];
+    ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+    for(const layer of layers) {
+      ctx.beginPath();trace(ctx);ctx.strokeStyle=layer.color;ctx.lineWidth=layer.width;
+      ctx.shadowColor='rgba(222,82,67,.72)';ctx.shadowBlur=layer.blur;ctx.stroke();
+    }
+    ctx.restore();
   }
 
-  function screenRing(point,color,r=8,fill='rgba(255,255,255,.76)') {
-    ctx.save();ctx.fillStyle=fill;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(point.x,point.y,r,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore();
+  function drawGlowingAtom(point) {
+    const atomRadius=Math.max(5,20*state.atomSize/Math.max(.76,point.p));
+    const pulse=1+Math.sin(performance.now()*.012)*.055,haloRadius=atomRadius*1.85*pulse;
+    const halo=ctx.createRadialGradient(point.x,point.y,atomRadius*.12,point.x,point.y,haloRadius);
+    halo.addColorStop(0,'rgba(255,255,255,.92)');halo.addColorStop(.26,'rgba(255,224,167,.66)');halo.addColorStop(.58,'rgba(238,115,94,.3)');halo.addColorStop(1,'rgba(238,115,94,0)');
+    ctx.save();ctx.fillStyle=halo;ctx.beginPath();ctx.arc(point.x,point.y,haloRadius,0,Math.PI*2);ctx.fill();
+    ctx.shadowColor='rgba(235,101,82,.9)';ctx.shadowBlur=18;ctx.strokeStyle='rgba(255,250,231,.95)';ctx.lineWidth=2.2;ctx.beginPath();ctx.arc(point.x,point.y,atomRadius+1.5,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.88)';ctx.shadowColor='rgba(255,211,147,.94)';ctx.shadowBlur=13;ctx.beginPath();ctx.arc(point.x-atomRadius*.28,point.y-atomRadius*.3,Math.max(2.2,atomRadius*.18),0,Math.PI*2);ctx.fill();ctx.restore();
   }
 
   function drawSymmetryTracer() {
@@ -507,44 +522,54 @@
     if(!animation||!atom||reduceMotion) return;
     const el=animation.el,start=project(atom.pos,animation.base),center=project([0,0,0],animation.base);
     const finalMatrix=M.mul(animation.base,symmetryMatrix(el,1)),target=project(atom.pos,finalMatrix),current=project(atom.pos);
-    ctx.save();ctx.font='700 11px ui-monospace,monospace';ctx.textBaseline='middle';
+    ctx.save();
     if(el.type==='rotoaxis') {
       const rotatedMatrix=M.mul(animation.base,M.rot(el.dir,Math.PI*2/el.order)),rotated=project(atom.pos,rotatedMatrix);
       const mx=(start.x+rotated.x)/2,my=(start.y+rotated.y)/2,dx=rotated.x-start.x,dy=rotated.y-start.y,len=Math.hypot(dx,dy)||1;
-      ctx.strokeStyle='rgba(101,84,154,.62)';ctx.lineWidth=1.6;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(start.x,start.y);ctx.quadraticCurveTo(mx-dy/len*24,my+dx/len*24,rotated.x,rotated.y);ctx.stroke();
-      screenPath([rotated,center,target],'rgba(201,105,91,.68)',1.8,[5,4]);
-      screenRing(start,'rgba(101,84,154,.72)',6);screenRing(rotated,'rgba(101,84,154,.86)',7);screenRing(target,'rgba(201,105,91,.92)',7);
-      ctx.fillStyle='#65549a';ctx.fillText('r',start.x+9,start.y-9);ctx.fillText('Rr',rotated.x+9,rotated.y-9);ctx.fillStyle='#b95b4f';ctx.fillText('−Rr',target.x+9,target.y-9);
+      drawGlowPath(path=>{path.moveTo(start.x,start.y);path.quadraticCurveTo(mx-dy/len*24,my+dx/len*24,rotated.x,rotated.y);path.lineTo(center.x,center.y);path.lineTo(target.x,target.y);});
     } else {
-      screenPath([start,center,target],'rgba(201,105,91,.72)',1.9,[5,4]);
-      screenRing(start,'rgba(101,84,154,.78)',7);screenRing(target,'rgba(201,105,91,.92)',7);
-      ctx.fillStyle='#65549a';ctx.fillText('r',start.x+9,start.y-9);ctx.fillStyle='#b95b4f';ctx.fillText('−r',target.x+9,target.y-9);
+      drawGlowPath(path=>{path.moveTo(start.x,start.y);path.lineTo(center.x,center.y);path.lineTo(target.x,target.y);});
     }
-    ctx.shadowColor='rgba(255,255,255,.96)';ctx.shadowBlur=8;ctx.strokeStyle='#d05f51';ctx.lineWidth=3;ctx.beginPath();ctx.arc(current.x,current.y,13,0,Math.PI*2);ctx.stroke();
-    ctx.shadowColor='rgba(208,95,81,.3)';ctx.shadowBlur=12;ctx.strokeStyle='rgba(255,255,255,.95)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(current.x,current.y,16,0,Math.PI*2);ctx.stroke();ctx.restore();
+    drawGlowingAtom(current);ctx.restore();
   }
 
-  function updateOperationReadout(e) {
+  function updateOperationReadout(e,u=0,waiting=false) {
     const box=$('operationReadout'),sequence=state.sequence,el=state.animation?.el;
     if(!box||!sequence||!el)return;
     const count=sequence.total>1?` ${sequence.current}/${sequence.total}`:'';
     const operation=el.type==='rotoaxis'?`${el.order}\u0305`:el.type==='axis'?`C${el.order}`:el.type==='inversion'?'i':el.label;
     let phase=el.label;
-    if(el.type==='inversion') phase='中心反演：追踪原子 r → −r';
-    if(el.type==='rotoaxis') phase=e<=.58?`旋转 ${formatNumber(360/el.order,0)}°`:'中心反演：Rr → −Rr';
+    if(el.type==='inversion') phase='中心反演：追踪发光原子 r → −r';
+    if(el.type==='rotoaxis') {
+      if(waiting) phase='稍停，准备下一次操作';
+      else if(sequence.kind==='demo'&&u>=.46&&u<.66) phase='旋转完成，停留观察';
+      else phase=e<=.58?`发光原子旋转 ${formatNumber(360/el.order,0)}°`:'中心反演：Rr → −Rr';
+    }
     box.textContent=`${operation}${count}  ${phase}`;box.classList.add('show');
   }
 
   function hideOperationReadout(){const box=$('operationReadout');if(box){box.classList.remove('show');box.textContent='';}}
   function setDemoButtonState(order=null){document.querySelectorAll('[data-roto-demo]').forEach(button=>button.classList.toggle('active',+button.dataset.rotoDemo===order));}
   function clearSymmetryPlayback(){state.animation=null;state.symmetryQueue=[];state.sequence=null;hideOperationReadout();setDemoButtonState();}
-  function symmetryDuration(el){return el.type==='rotoaxis'?1280:el.type==='axis'?820:el.type==='inversion'?980:680;}
-  function beginSymmetry(el){state.animation={el,base:state.modelMatrix,start:performance.now(),duration:symmetryDuration(el)};}
+  function symmetryDuration(el){return el.type==='rotoaxis'?(state.sequence?.kind==='demo'?2200:1280):el.type==='axis'?820:el.type==='inversion'?980:680;}
+  function beginSymmetry(el,delay=0){state.animation={el,base:state.modelMatrix,start:performance.now()+delay,duration:symmetryDuration(el)};}
+
+  function easeProgress(value){return value<.5?2*value*value:1-((-2*value+2)**2)/2;}
+
+  function animationProgress(animation,time) {
+    const waiting=time<animation.start,raw=Math.max(0,Math.min(1,(time-animation.start)/animation.duration));
+    if(animation.el.type==='rotoaxis'&&state.sequence?.kind==='demo') {
+      if(raw<.46) return {u:raw,e:.58*easeProgress(raw/.46),waiting};
+      if(raw<.66) return {u:raw,e:.58,waiting};
+      return {u:raw,e:.58+.42*easeProgress((raw-.66)/.34),waiting};
+    }
+    return {u:raw,e:easeProgress(raw),waiting};
+  }
 
   function finishSymmetry() {
     const animation=state.animation,sequence=state.sequence;state.modelMatrix=state.displayMatrix;
     if(state.symmetryQueue.length) {
-      const next=state.symmetryQueue.shift();sequence.current+=1;beginSymmetry(next);return;
+      const next=state.symmetryQueue.shift();sequence.current+=1;beginSymmetry(next,sequence.kind==='demo'?420:0);return;
     }
     state.animation=null;hideOperationReadout();setDemoButtonState();
     if(sequence?.kind==='demo') {
@@ -560,11 +585,11 @@
     if(!state.model){requestAnimationFrame(render);return;}
     if(state.auto&&!state.dragging&&!state.animation) state.yaw+=.0017;
     if(state.animation) {
-      const u=Math.min(1,(t-state.animation.start)/state.animation.duration),e=u<.5?2*u*u:1-((-2*u+2)**2)/2;
+      const {u,e,waiting}=animationProgress(state.animation,t);
       const op=symmetryMatrix(state.animation.el,e);
       state.displayMatrix=M.mul(state.animation.base,op);
-      updateOperationReadout(e);
-      if(u>=1)finishSymmetry();
+      updateOperationReadout(e,u,waiting);
+      if(u>=1&&!waiting)finishSymmetry();
     } else state.displayMatrix=state.modelMatrix;
 
     drawSymmetry(state.model);
