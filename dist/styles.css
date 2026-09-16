@@ -10,9 +10,9 @@
   --accent: #3155d9;
   --accent-hover: #2646bc;
   --accent-soft: #e9edff;
-  --viewer: #10151d;
-  --viewer-soft: #151c27;
-  --viewer-line: #2a3443;
+  --viewer: #fbfcfd;
+  --viewer-soft: #edf0f3;
+  --viewer-line: #d6dce4;
   --white: #ffffff;
   --radius-panel: 16px;
   --radius-control: 10px;
@@ -371,10 +371,10 @@ button:active {
   min-height: 720px;
   display: flex;
   flex-direction: column;
-  border-color: #252e3b;
-  color: #eef3fa;
+  border-color: #cfd5de;
+  color: var(--ink);
   background: var(--viewer);
-  box-shadow: 0 24px 70px rgba(16, 21, 29, 0.22);
+  box-shadow: 0 24px 70px rgba(31, 40, 54, 0.13);
 }
 
 .viewer-toolbar,
@@ -396,8 +396,8 @@ button:active {
 .structure-kicker {
   display: block;
   margin-bottom: 4px;
-  color: #8996a8;
-  font-size: 11px;
+  color: #78818d;
+  font-size: 12px;
 }
 
 .viewer-toolbar strong {
@@ -414,19 +414,19 @@ button:active {
   min-width: 46px;
   height: 34px;
   padding: 0 10px;
-  border: 1px solid #354153;
+  border: 1px solid #cfd5de;
   border-radius: 8px;
-  color: #aab5c5;
-  background: #18212d;
+  color: #5f6875;
+  background: #f2f4f7;
   font-size: 12px;
   font-weight: 700;
 }
 
 .viewer-actions button:hover,
 .viewer-actions button.active {
-  border-color: #61729a;
+  border-color: #8fa1e3;
   color: var(--white);
-  background: #27334a;
+  background: var(--accent);
 }
 
 .canvas-wrap {
@@ -434,11 +434,7 @@ button:active {
   min-height: 540px;
   flex: 1 1 auto;
   overflow: hidden;
-  background-color: var(--viewer-soft);
-  background-image:
-    linear-gradient(rgba(110, 129, 156, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(110, 129, 156, 0.055) 1px, transparent 1px);
-  background-size: 28px 28px;
+  background: var(--viewer-soft);
 }
 
 #latticeCanvas {
@@ -455,7 +451,7 @@ button:active {
   bottom: 18px;
   display: flex;
   gap: 7px;
-  color: #c6d0dd;
+  color: #596372;
   font: 700 11px/1 ui-monospace, "SFMono-Regular", Consolas, monospace;
   pointer-events: none;
 }
@@ -465,14 +461,14 @@ button:active {
   height: 22px;
   display: grid;
   place-items: center;
-  border: 1px solid #435066;
+  border: 1px solid rgba(118, 128, 142, 0.3);
   border-radius: 6px;
-  background: rgba(16, 21, 29, 0.84);
+  background: rgba(255, 255, 255, 0.82);
 }
 
-.axis-key .x { color: #ff8b83; }
-.axis-key .y { color: #70dac9; }
-.axis-key .z { color: #84a7ff; }
+.axis-key .x { color: #bc625d; }
+.axis-key .y { color: #3f907d; }
+.axis-key .z { color: #5878bd; }
 
 .interaction-hint {
   position: absolute;
@@ -480,11 +476,11 @@ button:active {
   bottom: 17px;
   max-width: calc(100% - 150px);
   padding: 7px 9px;
-  border: 1px solid rgba(124, 141, 166, 0.24);
+  border: 1px solid rgba(118, 128, 142, 0.26);
   border-radius: 7px;
-  color: #94a0b1;
-  background: rgba(16, 21, 29, 0.74);
-  font-size: 11px;
+  color: #737d8a;
+  background: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
   pointer-events: none;
 }
 
@@ -525,12 +521,12 @@ button:active {
   grid-template-columns: auto minmax(70px, 1fr) 38px;
   align-items: center;
   gap: 10px;
-  color: #aeb9c8;
+  color: #606a77;
   font-size: 12px;
 }
 
 .viewer-footer output {
-  color: #e7edf6;
+  color: #39414c;
   font: 700 11px/1 ui-monospace, "SFMono-Regular", Consolas, monospace;
   text-align: right;
 }
@@ -539,7 +535,7 @@ input[type="range"] {
   height: 4px;
   border-radius: 999px;
   appearance: none;
-  background: #39465a;
+  background: #c8ced8;
 }
 
 input[type="range"]::-webkit-slider-thumb {
@@ -548,17 +544,18 @@ input[type="range"]::-webkit-slider-thumb {
   border: 2px solid var(--viewer);
   border-radius: 50%;
   appearance: none;
-  background: #9db5ff;
+  background: var(--accent);
 }
 
 .legend {
   grid-column: 1 / -1;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #7f8b9c;
-  font-size: 10px;
+  color: #78818d;
+  font-size: 12px;
 }
 
 .legend span {
@@ -573,9 +570,10 @@ input[type="range"]::-webkit-slider-thumb {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #5eead4;
+  background: #94d6c1;
 }
 
+.bond-line,
 .ws-line,
 .sym-line {
   width: 15px;
@@ -583,8 +581,9 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: 2px;
 }
 
-.ws-line { background: #f5bb53; }
-.sym-line { background: #b59cff; }
+.bond-line { background: #aeb7c3; }
+.ws-line { background: #b18023; }
+.sym-line { background: #65549a; }
 
 .result-hero {
   position: relative;

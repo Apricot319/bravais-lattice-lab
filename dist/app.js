@@ -6,7 +6,7 @@
   const ctx = canvas.getContext('2d');
   canvas.tabIndex = 0;
 
-  const COLORS = ['#5eead4', '#fbbf24', '#a78bfa', '#fb7185', '#60a5fa'];
+  const COLORS = ['#94d6c1', '#aeb9e2', '#f0c978', '#ef9c93', '#8fc1e8'];
   const CENTER_NAMES = { P: '原始点阵', I: '体心点阵', F: '面心点阵', C: '底心点阵', R: '菱方点阵' };
   const SYSTEM_NAMES = { triclinic: '三斜晶系', monoclinic: '单斜晶系', orthorhombic: '正交晶系', tetragonal: '四方晶系', hexagonal: '六方晶系', rhombohedral: '菱方晶系', cubic: '立方晶系' };
   const SYSTEM_PREFIX = { triclinic: 'a', monoclinic: 'm', orthorhombic: 'o', tetragonal: 't', hexagonal: 'h', rhombohedral: 'h', cubic: 'c' };
@@ -35,19 +35,19 @@
   const fcc = [[0,0,0],[0,.5,.5],[.5,0,.5],[.5,.5,0]];
   const STRUCTURES = [
     { id:'nacl', code:'cF', system:'cubic', center:'F', name:'岩盐结构', example:'NaCl', p:[5.64,5.64,5.64,90,90,90], packing:null, nearest:2.82,
-      atoms:[...fcc.map(f=>({f,s:'Cl',c:'#5eead4'})), ...[[.5,0,0],[0,.5,0],[0,0,.5],[.5,.5,.5]].map(f=>({f,s:'Na',c:'#a78bfa'}))], coordination:[['Na',6,'Cl'],['Cl',6,'Na']] },
+      atoms:[...fcc.map(f=>({f,s:'Cl',c:'#94d6c1'})), ...[[.5,0,0],[0,.5,0],[0,0,.5],[.5,.5,.5]].map(f=>({f,s:'Na',c:'#aeb9e2'}))], coordination:[['Na',6,'Cl'],['Cl',6,'Na']] },
     { id:'cscl', code:'cP', system:'cubic', center:'P', name:'氯化铯结构', example:'CsCl', p:[4.12,4.12,4.12,90,90,90], packing:null, nearest:3.57,
-      atoms:[{f:[0,0,0],s:'Cs',c:'#a78bfa'},{f:[.5,.5,.5],s:'Cl',c:'#5eead4'}], coordination:[['Cs',8,'Cl'],['Cl',8,'Cs']] },
+      atoms:[{f:[0,0,0],s:'Cs',c:'#aeb9e2'},{f:[.5,.5,.5],s:'Cl',c:'#94d6c1'}], coordination:[['Cs',8,'Cl'],['Cl',8,'Cs']] },
     { id:'diamond', code:'cF', system:'cubic', center:'F', name:'金刚石结构', example:'C', p:[3.57,3.57,3.57,90,90,90], packing:.340, nearest:1.55,
-      atoms:[...fcc,...[[.25,.25,.25],[.25,.75,.75],[.75,.25,.75],[.75,.75,.25]]].map(f=>({f,s:'C',c:'#60a5fa'})), coordination:[['C',4,'C']] },
+      atoms:[...fcc,...[[.25,.25,.25],[.25,.75,.75],[.75,.25,.75],[.75,.75,.25]]].map(f=>({f,s:'C',c:'#8fc1e8'})), coordination:[['C',4,'C']] },
     { id:'zns', code:'cF', system:'cubic', center:'F', name:'闪锌矿结构', example:'ZnS', p:[5.41,5.41,5.41,90,90,90], packing:null, nearest:2.34,
-      atoms:[...fcc.map(f=>({f,s:'S',c:'#fbbf24'})), ...[[.25,.25,.25],[.25,.75,.75],[.75,.25,.75],[.75,.75,.25]].map(f=>({f,s:'Zn',c:'#a78bfa'}))], coordination:[['Zn',4,'S'],['S',4,'Zn']] },
+      atoms:[...fcc.map(f=>({f,s:'S',c:'#f0c978'})), ...[[.25,.25,.25],[.25,.75,.75],[.75,.25,.75],[.75,.75,.25]].map(f=>({f,s:'Zn',c:'#aeb9e2'}))], coordination:[['Zn',4,'S'],['S',4,'Zn']] },
     { id:'hcp', code:'hP', system:'hexagonal', center:'P', name:'六方最密堆积', example:'Mg', p:[3.21,3.21,5.21,90,90,120], packing:.7405, nearest:3.21,
-      atoms:[{f:[0,0,0],s:'Mg',c:'#5eead4'},{f:[2/3,1/3,.5],s:'Mg',c:'#5eead4'}], coordination:[['Mg',12,'Mg']] }
+      atoms:[{f:[0,0,0],s:'Mg',c:'#94d6c1'},{f:[2/3,1/3,.5],s:'Mg',c:'#94d6c1'}], coordination:[['Mg',12,'Mg']] }
   ];
 
   const state = {
-    yaw:-.62, pitch:.58, zoom:1, perspective:.62, atomSize:.92, auto:true, dragging:false, moved:0,
+    yaw:-.62, pitch:.58, zoom:1, perspective:.28, atomSize:.92, auto:false, dragging:false, moved:0,
     modelMatrix:[[1,0,0],[0,1,0],[0,0,1]], displayMatrix:[[1,0,0],[0,1,0],[0,0,1]],
     model:null, currentPreset:null, sceneRadius:1, hitAreas:[], hover:null, animation:null, dpr:1, toastTimer:null
   };
@@ -126,6 +126,17 @@
     const count=centerOffsets(model.center).length;
     const packing=model.volume>0?count*(4/3)*Math.PI*(nearest/2)**3/model.volume:0;
     return { nearest, cn, count, packing:Math.min(packing,1) };
+  }
+
+  function nearestBonds(atoms, nearest) {
+    if(!Number.isFinite(nearest)||nearest<=0) return [];
+    const bonds=[], tolerance=Math.max(1e-4,nearest*.035);
+    for(let i=0;i<atoms.length-1;i++) for(let j=i+1;j<atoms.length;j++) {
+      const distance=V.norm(V.sub(atoms[i].pos,atoms[j].pos));
+      if(distance>1e-7&&Math.abs(distance-nearest)<=tolerance) bonds.push({a:atoms[i].pos,b:atoms[j].pos});
+      if(bonds.length>=240) return bonds;
+    }
+    return bonds;
   }
 
   function wsPolyhedron(model) {
@@ -223,10 +234,11 @@
       model.displayAtoms=expandBasis(source.atoms).map(a=>({...a,pos:fracToCart(a.f,model.vectors,true)}));
       model.metrics={nearest:source.nearest,packing:source.packing,count:centerOffsets(source.center).length,cn:source.coordination[0][1]};
     } else {
-      const color=source.code==='cF'?'#60a5fa':source.code==='cI'?'#a78bfa':'#5eead4';
+      const color=source.code==='cF'?'#8fc1e8':source.code==='cI'?'#aeb9e2':'#94d6c1';
       model.displayAtoms=boundaryLatticePoints(source.center).map(f=>({f,s:source.species||'格点',c:color,pos:fracToCart(f,model.vectors,true)}));
       model.metrics=nearestBravais(model);
     }
+    model.bonds=nearestBonds(model.displayAtoms,model.metrics.nearest);
     model.ws=wsPolyhedron(model); model.symmetry=symmetryElements(model);
     const cellCorners=[]; for(const x of [0,1]) for(const y of [0,1]) for(const z of [0,1]) cellCorners.push(fracToCart([x,y,z],model.vectors,true));
     model.cellCorners=cellCorners;
@@ -309,17 +321,35 @@
 
   function project(v) {
     const q=viewTransform(v), rect=canvas.getBoundingClientRect(), radius=state.sceneRadius||1;
-    const s=Math.min(rect.width,rect.height)*.38*state.zoom/radius, perspective=Math.max(.64,1+(q[2]/radius)*.22*state.perspective);
+    const s=Math.min(rect.width,rect.height)*.38*state.zoom/radius, perspective=Math.max(.76,1+(q[2]/radius)*.14*state.perspective);
     return {x:rect.width/2+q[0]*s/perspective,y:rect.height/2+q[1]*s/perspective,z:q[2],p:perspective};
   }
 
   function line(a,b,color,width=1.2,dash=[]) { const p=project(a),q=project(b); ctx.save();ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dash);ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();ctx.restore(); return [p,q]; }
   function polygon(points,fill,stroke,width=1,dash=[]) { const p=points.map(project);ctx.save();ctx.fillStyle=fill;ctx.strokeStyle=stroke;ctx.lineWidth=width;ctx.setLineDash(dash);ctx.beginPath();p.forEach((v,i)=>i?ctx.lineTo(v.x,v.y):ctx.moveTo(v.x,v.y));ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();return p; }
 
+  function mixColor(hex,target,amount) {
+    const parse=value=>{const n=parseInt(value.slice(1),16);return[(n>>16)&255,(n>>8)&255,n&255];};
+    const a=parse(hex),b=parse(target),m=Math.max(0,Math.min(1,amount));
+    return `rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*m)).join(',')})`;
+  }
+
+  function drawBond(bond) {
+    const p=project(bond.a),q=project(bond.b),scale=Math.max(.72,(p.p+q.p)/2),width=Math.max(4.5,9.5*state.atomSize/scale);
+    ctx.save();ctx.lineCap='round';
+    ctx.strokeStyle='rgba(91,103,120,.42)';ctx.lineWidth=width+2.2;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();
+    ctx.strokeStyle='#b9c1cc';ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();
+    ctx.translate(-1,-1);ctx.strokeStyle='rgba(255,255,255,.52)';ctx.lineWidth=Math.max(1.1,width*.22);ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();ctx.restore();
+  }
+
   function drawAtom(atom) {
-    const p=project(atom.pos), r=Math.max(3.5,13*state.atomSize/Math.max(.68,p.p));
-    const g=ctx.createRadialGradient(p.x-r*.38,p.y-r*.42,r*.06,p.x,p.y,r); g.addColorStop(0,'#fff');g.addColorStop(.18,atom.c);g.addColorStop(.68,atom.c+'cc');g.addColorStop(1,'#07101b');
-    ctx.save();ctx.shadowColor=atom.c;ctx.shadowBlur=10;ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle='rgba(255,255,255,.34)';ctx.lineWidth=.7;ctx.stroke();ctx.restore();
+    const p=project(atom.pos),r=Math.max(5,20*state.atomSize/Math.max(.76,p.p));
+    const far=Math.max(0,Math.min(1,(p.z/(state.sceneRadius||1)+1)/2)),base=mixColor(atom.c,'#eef1f5',far*.08);
+    const light=mixColor(base,'#ffffff',.62),mid=mixColor(base,'#ffffff',.08),dark=mixColor(base,'#718899',.12);
+    const g=ctx.createRadialGradient(p.x-r*.36,p.y-r*.42,r*.04,p.x+r*.08,p.y+r*.1,r*1.04);
+    g.addColorStop(0,'rgba(255,255,255,.98)');g.addColorStop(.12,light);g.addColorStop(.48,mid);g.addColorStop(1,dark);
+    ctx.save();ctx.shadowColor='rgba(86,100,116,.13)';ctx.shadowBlur=4;ctx.shadowOffsetY=2;ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
+    ctx.shadowColor='transparent';ctx.strokeStyle='rgba(86,100,116,.16)';ctx.lineWidth=.8;ctx.stroke();ctx.restore();
   }
 
   const CELL_EDGES=[[0,4],[4,6],[6,2],[2,0],[1,5],[5,7],[7,3],[3,1],[0,1],[4,5],[6,7],[2,3]];
@@ -328,12 +358,12 @@
     state.hitAreas=[]; const L=state.sceneRadius*.94;
     if($('togglePlanes').checked) for(const el of model.symmetry.planes) {
       const [u,v]=perpendicularBasis(el.normal), s=L*.72, pts=[V.add(V.scale(u,s),V.scale(v,s)),V.add(V.scale(u,-s),V.scale(v,s)),V.add(V.scale(u,-s),V.scale(v,-s)),V.add(V.scale(u,s),V.scale(v,-s))];
-      const hovered=state.hover===el, poly=polygon(pts,hovered?'rgba(94,234,212,.16)':'rgba(94,234,212,.075)',hovered?'rgba(94,234,212,.72)':'rgba(94,234,212,.25)',hovered?1.4:.8,[5,6]);
+      const hovered=state.hover===el, poly=polygon(pts,hovered?'rgba(73,143,126,.18)':'rgba(73,143,126,.08)',hovered?'rgba(48,111,96,.72)':'rgba(48,111,96,.34)',hovered?1.4:.9,[5,6]);
       state.hitAreas.push({el,kind:'plane',poly});
     }
     if($('toggleAxes').checked) for(const el of model.symmetry.axes) {
-      const a=V.scale(el.dir,-L),b=V.scale(el.dir,L),hovered=state.hover===el,[p,q]=line(a,b,hovered?'rgba(251,191,36,.98)':'rgba(167,139,250,.78)',hovered?3:1.7,[7,5]);
-      ctx.save();ctx.fillStyle=hovered?'#fbbf24':'#c4b5fd';ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=7;ctx.beginPath();ctx.arc(q.x,q.y,hovered?4.2:3.2,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.font='700 11px ui-monospace,monospace';ctx.fillText(`C${el.order}`,q.x+6,q.y-5);ctx.restore();
+      const a=V.scale(el.dir,-L),b=V.scale(el.dir,L),hovered=state.hover===el,[p,q]=line(a,b,hovered?'rgba(183,128,26,.98)':'rgba(100,83,154,.72)',hovered?3:1.7,[7,5]);
+      ctx.save();ctx.fillStyle=hovered?'#a96f12':'#65549a';ctx.beginPath();ctx.arc(q.x,q.y,hovered?4.2:3.2,0,Math.PI*2);ctx.fill();ctx.font='700 11px ui-monospace,monospace';ctx.fillText(`C${el.order}`,q.x+6,q.y-5);ctx.restore();
       state.hitAreas.push({el,kind:'axis',a:p,b:q});
     }
   }
@@ -350,9 +380,10 @@
     } else state.displayMatrix=state.modelMatrix;
 
     drawSymmetry(state.model);
-    CELL_EDGES.forEach(([a,b])=>line(state.model.cellCorners[a],state.model.cellCorners[b],'rgba(152,190,226,.58)',1.25));
-    if($('toggleWS').checked) state.model.ws.edges.forEach(([a,b])=>line(state.model.ws.vertices[a],state.model.ws.vertices[b],'rgba(251,191,36,.92)',1.55));
-    const atoms=[...state.model.displayAtoms].sort((a,b)=>viewTransform(a.pos)[2]-viewTransform(b.pos)[2]); atoms.forEach(drawAtom);
+    CELL_EDGES.forEach(([a,b])=>line(state.model.cellCorners[a],state.model.cellCorners[b],'rgba(84,98,117,.46)',1.15));
+    if($('toggleWS').checked) state.model.ws.edges.forEach(([a,b])=>line(state.model.ws.vertices[a],state.model.ws.vertices[b],'rgba(177,128,35,.82)',1.45));
+    const bonds=[...state.model.bonds].sort((a,b)=>viewTransform(V.scale(V.add(b.a,b.b),.5))[2]-viewTransform(V.scale(V.add(a.a,a.b),.5))[2]); bonds.forEach(drawBond);
+    const atoms=[...state.model.displayAtoms].sort((a,b)=>viewTransform(b.pos)[2]-viewTransform(a.pos)[2]); atoms.forEach(drawAtom);
     requestAnimationFrame(render);
   }
 
