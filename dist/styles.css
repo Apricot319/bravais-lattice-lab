@@ -575,7 +575,8 @@ input[type="range"]::-webkit-slider-thumb {
 
 .bond-line,
 .ws-line,
-.sym-line {
+.sym-line,
+.improper-line {
   width: 15px;
   height: 2px;
   border-radius: 2px;
@@ -584,6 +585,10 @@ input[type="range"]::-webkit-slider-thumb {
 .bond-line { background: #aeb7c3; }
 .ws-line { background: #b18023; }
 .sym-line { background: #65549a; }
+.improper-line {
+  height: 0;
+  border-top: 2px dashed #c9695b;
+}
 
 .result-hero {
   position: relative;
@@ -745,7 +750,8 @@ input[type="range"]::-webkit-slider-thumb {
 
 .symmetry-tags button {
   min-height: 32px;
-  padding: 5px 10px;
+  min-width: 48px;
+  padding: 5px 8px;
   border: 1px solid #ccd2df;
   border-radius: 8px;
   color: #3e4652;
@@ -753,10 +759,35 @@ input[type="range"]::-webkit-slider-thumb {
   font: 700 12px/1 ui-monospace, "SFMono-Regular", Consolas, monospace;
 }
 
+.symmetry-tags button span,
+.symmetry-tags button small {
+  display: inline-block;
+}
+
+.symmetry-tags button small {
+  margin-left: 4px;
+  color: #89919d;
+  font-size: 9px;
+}
+
 .symmetry-tags button:hover {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-soft);
+}
+
+.symmetry-tags button:disabled {
+  cursor: not-allowed;
+  border-color: #e3e6ec;
+  color: #aeb4be;
+  background: #f5f6f8;
+  opacity: .72;
+}
+
+.symmetry-tags button:disabled:hover {
+  border-color: #e3e6ec;
+  color: #aeb4be;
+  background: #f5f6f8;
 }
 
 .symmetry-empty {

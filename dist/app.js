@@ -62,7 +62,8 @@
     mul:(a,b)=>a.map(r=>b[0].map((_,j)=>r[0]*b[0][j]+r[1]*b[1][j]+r[2]*b[2][j])),
     vec:(m,v)=>[V.dot(m[0],v),V.dot(m[1],v),V.dot(m[2],v)],
     rot(axis,angle){ const [x,y,z]=V.unit(axis), c=Math.cos(angle), s=Math.sin(angle), t=1-c; return [[t*x*x+c,t*x*y-s*z,t*x*z+s*y],[t*x*y+s*z,t*y*y+c,t*y*z-s*x],[t*x*z-s*y,t*y*z+s*x,t*z*z+c]]; },
-    reflectPartial(normal,t){ const [x,y,z]=V.unit(normal), k=2*t; return [[1-k*x*x,-k*x*y,-k*x*z],[-k*y*x,1-k*y*y,-k*y*z],[-k*z*x,-k*z*y,1-k*z*z]]; }
+    reflectPartial(normal,t){ const [x,y,z]=V.unit(normal), k=2*t; return [[1-k*x*x,-k*x*y,-k*x*z],[-k*y*x,1-k*y*y,-k*y*z],[-k*z*x,-k*z*y,1-k*z*z]]; },
+    invertPartial(t){ const k=1-2*t; return [[k,0,0],[0,k,0],[0,0,k]]; }
   };
 
   function latticeVectors(p) {
@@ -176,16 +177,24 @@
   }
 
   function symmetryElements(model) {
-    const axes=[], planes=[];
+    const axes=[], planes=[], inversions=[], rotoAxes=[];
     const axis=(dir,order,label)=>axes.push({type:'axis',dir:V.unit(dir),order,label:label||`C${order}`});
     const plane=(normal,label)=>planes.push({type:'plane',normal:V.unit(normal),label:label||'镜面 m'});
+    const inversion=(label='i · 反演中心')=>inversions.push({type:'inversion',point:[0,0,0],label});
+    const rotoAxis=(dir,order,label)=>rotoAxes.push({type:'rotoaxis',dir:V.unit(dir),order,label:label||`${order}\u0305 重旋转反演轴`});
     const sys=model.system;
-    if(sys==='cubic') {
+    if(model.id==='zns') {
+      [[1,1,1],[1,1,-1],[1,-1,1],[-1,1,1]].forEach(d=>axis(d,3,'C₃ · ⟨111⟩'));
+      [[1,0,0],[0,1,0],[0,0,1]].forEach((d,i)=>axis(d,2,`C₂ · ${['[100]','[010]','[001]'][i]}`));
+      [[1,1,0],[1,-1,0],[1,0,1],[1,0,-1],[0,1,1],[0,1,-1]].forEach(n=>plane(n,'m · {110}'));
+      [[1,0,0],[0,1,0],[0,0,1]].forEach(d=>rotoAxis(d,4,'4\u0305 · 闪锌矿反轴'));
+    } else if(sys==='cubic') {
       [[1,0,0],[0,1,0],[0,0,1]].forEach((d,i)=>axis(d,4,`C₄ · ${['[100]','[010]','[001]'][i]}`));
       [[1,1,1],[1,1,-1],[1,-1,1],[-1,1,1]].forEach(d=>axis(d,3,'C₃ · ⟨111⟩'));
       [[1,1,0],[1,-1,0],[1,0,1],[1,0,-1],[0,1,1],[0,1,-1]].forEach(d=>axis(d,2,'C₂ · ⟨110⟩'));
       [[1,0,0],[0,1,0],[0,0,1]].forEach(n=>plane(n,'m · {100}'));
       [[1,1,0],[1,-1,0],[1,0,1],[1,0,-1],[0,1,1],[0,1,-1]].forEach(n=>plane(n,'m · {110}'));
+      [[1,0,0],[0,1,0],[0,0,1]].forEach(d=>rotoAxis(d,4,'4\u0305 · ⟨100⟩'));
     } else if(sys==='tetragonal') {
       axis([0,0,1],4,'C₄ · [001]'); [[1,0,0],[0,1,0],[1,1,0],[1,-1,0]].forEach(d=>axis(d,2,'C₂ · 基面'));
       [[0,0,1],[1,0,0],[0,1,0],[1,1,0],[1,-1,0]].forEach(n=>plane(n,n[2]?'m · (001)':'m · 竖直'));
@@ -204,7 +213,9 @@
     } else if(sys==='monoclinic') {
       const b=V.unit(model.vectors[1]); axis(b,2,'C₂ · b 轴'); plane(b,'m · ⟂b');
     }
-    return {axes,planes};
+    if(model.id!=='zns') inversion();
+    if(sys==='tetragonal') rotoAxis([0,0,1],4,'4\u0305 · [001]');
+    return {identity:{type:'identity',label:'1 · 恒等操作'},axes,planes,inversions,rotoAxes};
   }
 
   function validateParams(p) {
@@ -291,16 +302,19 @@
   }
 
   function updateSymmetrySummary(model) {
-    const a=model.symmetry.axes, p=model.symmetry.planes, groups={};
+    const {identity,axes:a,planes:p,inversions:i,rotoAxes:r}=model.symmetry, groups={};
     a.forEach(x=>groups[`C${x.order}`]=(groups[`C${x.order}`]||0)+1);
-    const parts=Object.entries(groups).map(([k,v])=>`<button type="button" data-sym="axis" data-order="${k.slice(1)}">${k.replace(/(\d)/,c=>'₀₁₂₃₄₅₆₇₈₉'[+c])} ×${v}</button>`);
-    if(p.length) parts.push(`<button type="button" data-sym="plane">m ×${p.length}</button>`);
-    $('symmetryTags').innerHTML=parts.length?parts.join(''):'<span class="symmetry-empty">仅有反心（无旋转轴或镜面）</span>';
-    $('symmetryCount').textContent=`${a.length+p.length} 个`;
-    $('symmetryHint').textContent=parts.length?'在视图中点击彩色轴或镜面，即可执行对应的对称操作。':'三斜 Bravais 格子的点群为 1̄；反心未单独绘制。';
-    $('symmetryTags').querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
-      const type=btn.dataset.sym, order=+btn.dataset.order; const el=type==='plane'?p[0]:a.find(x=>x.order===order); if(el) startSymmetry(el);
-    }));
+    const catalog=[
+      {symbol:'1',title:'恒等操作',type:'identity',count:1,el:identity},
+      ...[2,3,4,6].map(order=>({symbol:`${order}`,title:`${order} 重旋转`,type:'axis',order,count:groups[`C${order}`]||0,el:a.find(x=>x.order===order)})),
+      {symbol:'i',title:'中心反演',type:'inversion',count:i.length,el:i[0]},
+      {symbol:'m',title:'镜面反射',type:'plane',count:p.length,el:p[0]},
+      {symbol:'4\u0305',title:'四重旋转反演',type:'rotoaxis',order:4,count:r.length,el:r[0]}
+    ];
+    $('symmetryTags').innerHTML=catalog.map((op,index)=>`<button type="button" data-operation="${index}" title="${op.title}" ${op.el?'':'disabled'}><span>${op.symbol}</span>${op.el?`<small>×${op.count}</small>`:'<small>—</small>'}</button>`).join('');
+    $('symmetryCount').textContent=`${a.length+p.length+i.length+r.length} 个元素`;
+    $('symmetryHint').textContent='八种基本操作固定列出；高亮项属于当前晶胞，点击即可播放。1 表示恒等操作。';
+    $('symmetryTags').querySelectorAll('button:not(:disabled)').forEach(btn=>btn.addEventListener('click',()=>startSymmetry(catalog[+btn.dataset.operation].el)));
   }
 
   function formatNumber(n,d=2){ if(!Number.isFinite(n)) return '暂无'; if(Math.abs(n)>=1000) return n.toFixed(0); if(Math.abs(n)>=100) return n.toFixed(1); return n.toFixed(d); }
@@ -365,11 +379,55 @@
       const hovered=state.hover===el, poly=polygon(pts,hovered?'rgba(73,143,126,.18)':'rgba(73,143,126,.08)',hovered?'rgba(48,111,96,.72)':'rgba(48,111,96,.34)',hovered?1.4:.9,[5,6]);
       state.hitAreas.push({el,kind:'plane',poly});
     }
+    if($('toggleImproper').checked) {
+      for(const el of model.symmetry.rotoAxes) {
+        const outerL=L*1.28,outerA=project(V.scale(el.dir,-outerL)),outerB=project(V.scale(el.dir,outerL));
+        const overlap=model.symmetry.axes.some(axis=>Math.abs(V.dot(axis.dir,el.dir))>.999);
+        const innerA=overlap?project(V.scale(el.dir,-L)):outerA,innerB=overlap?project(V.scale(el.dir,L)):outerB;
+        const hovered=state.hover===el,segments=overlap?[[outerA,innerA],[innerB,outerB]]:[[outerA,outerB]];
+        ctx.save();ctx.lineCap='round';
+        if(overlap) {
+          ctx.strokeStyle=hovered?'rgba(207,128,116,.34)':'rgba(207,128,116,.18)';ctx.lineWidth=hovered?3:2.2;ctx.setLineDash([3,5]);ctx.beginPath();ctx.moveTo(innerA.x,innerA.y);ctx.lineTo(innerB.x,innerB.y);ctx.stroke();
+        }
+        ctx.strokeStyle=hovered?'rgba(190,73,61,.98)':'rgba(201,105,91,.88)';ctx.lineWidth=hovered?3.6:2.5;ctx.setLineDash([4,3]);
+        for(const [a,b] of segments){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+        ctx.setLineDash([]);ctx.fillStyle=hovered?'#b94f43':'#c9695b';
+        for(const p of [outerA,outerB]){ctx.beginPath();ctx.moveTo(p.x,p.y-4.8);ctx.lineTo(p.x+4.8,p.y);ctx.lineTo(p.x,p.y+4.8);ctx.lineTo(p.x-4.8,p.y);ctx.closePath();ctx.fill();}
+        ctx.font='700 12px ui-monospace,monospace';ctx.fillText('4\u0305',outerB.x+7,outerB.y-5);ctx.restore();
+        state.hitAreas.push({el,kind:'rotoaxis',segments});
+      }
+    }
     if($('toggleAxes').checked) for(const el of model.symmetry.axes) {
-      const a=V.scale(el.dir,-L),b=V.scale(el.dir,L),hovered=state.hover===el,[p,q]=line(a,b,hovered?'rgba(183,128,26,.98)':'rgba(100,83,154,.72)',hovered?3:1.7,[7,5]);
+      const a=V.scale(el.dir,-L),b=V.scale(el.dir,L),hovered=state.hover===el,[p,q]=line(a,b,hovered?'rgba(183,128,26,.98)':'rgba(100,83,154,.78)',hovered?3:1.8,[7,5]);
       ctx.save();ctx.fillStyle=hovered?'#a96f12':'#65549a';ctx.beginPath();ctx.arc(q.x,q.y,hovered?4.2:3.2,0,Math.PI*2);ctx.fill();ctx.font='700 11px ui-monospace,monospace';ctx.fillText(`C${el.order}`,q.x+6,q.y-5);ctx.restore();
       state.hitAreas.push({el,kind:'axis',a:p,b:q});
     }
+    if($('toggleImproper').checked) {
+      for(const el of model.symmetry.inversions) {
+        const p=project(el.point),hovered=state.hover===el,r=hovered?9:7;
+        state.hitAreas.push({el,kind:'inversion',p,r:r+8});
+      }
+    }
+  }
+
+  function drawInversionCenters(model) {
+    if(!$('toggleImproper').checked) return;
+    for(const el of model.symmetry.inversions) {
+      const p=project(el.point),hovered=state.hover===el,r=hovered?9:7;
+      ctx.save();ctx.shadowColor='rgba(255,255,255,.95)';ctx.shadowBlur=8;ctx.fillStyle='rgba(255,255,255,.96)';ctx.strokeStyle=hovered?'#b94f43':'#c9695b';ctx.lineWidth=hovered?2.8:2;ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+      ctx.shadowColor='rgba(255,255,255,.95)';ctx.shadowBlur=5;ctx.fillStyle=hovered?'#b94f43':'#c9695b';ctx.font='italic 800 14px Georgia,serif';ctx.fillText('i',p.x+r+5,p.y-r-3);ctx.restore();
+    }
+  }
+
+  function symmetryMatrix(el,e) {
+    if(el.type==='axis') return M.rot(el.dir,Math.PI*2/el.order*e);
+    if(el.type==='plane') return M.reflectPartial(el.normal,e);
+    if(el.type==='inversion') return M.invertPartial(e);
+    if(el.type==='rotoaxis') {
+      const split=.58,rotation=M.rot(el.dir,Math.PI*2/el.order*Math.min(1,e/split));
+      return e<=split?rotation:M.mul(M.invertPartial((e-split)/(1-split)),rotation);
+    }
+    return [[1,0,0],[0,1,0],[0,0,1]];
   }
 
   function render(t) {
@@ -378,7 +436,7 @@
     if(state.auto&&!state.dragging&&!state.animation) state.yaw+=.0017;
     if(state.animation) {
       const u=Math.min(1,(t-state.animation.start)/state.animation.duration),e=u<.5?2*u*u:1-((-2*u+2)**2)/2;
-      const op=state.animation.el.type==='axis'?M.rot(state.animation.el.dir,Math.PI*2/state.animation.el.order*e):M.reflectPartial(state.animation.el.normal,e);
+      const op=symmetryMatrix(state.animation.el,e);
       state.displayMatrix=M.mul(state.animation.base,op);
       if(u>=1){state.modelMatrix=state.displayMatrix;const label=state.animation.el.label;state.animation=null;showToast(`已执行 ${label} 对称操作`);}
     } else state.displayMatrix=state.modelMatrix;
@@ -388,14 +446,26 @@
     if($('toggleWS').checked) state.model.ws.edges.forEach(([a,b])=>line(state.model.ws.vertices[a],state.model.ws.vertices[b],'rgba(177,128,35,.82)',1.45));
     const bonds=[...state.model.bonds].sort((a,b)=>viewTransform(V.scale(V.add(b.a,b.b),.5))[2]-viewTransform(V.scale(V.add(a.a,a.b),.5))[2]); bonds.forEach(drawBond);
     const atoms=[...state.model.displayAtoms].sort((a,b)=>viewTransform(b.pos)[2]-viewTransform(a.pos)[2]); atoms.forEach(drawAtom);
+    drawInversionCenters(state.model);
     requestAnimationFrame(render);
   }
 
   function pointSegDistance(p,a,b) { const dx=b.x-a.x,dy=b.y-a.y,l=dx*dx+dy*dy||1,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/l)),x=a.x+t*dx,y=a.y+t*dy;return Math.hypot(p.x-x,p.y-y); }
   function pointInPoly(p,poly){ let inside=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if(((a.y>p.y)!==(b.y>p.y))&&(p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x))inside=!inside;}return inside; }
-  function hitTest(p){ const axis=state.hitAreas.filter(h=>h.kind==='axis').find(h=>pointSegDistance(p,h.a,h.b)<11); if(axis)return axis.el; const plane=[...state.hitAreas].reverse().find(h=>h.kind==='plane'&&pointInPoly(p,h.poly));return plane?.el||null; }
+  function hitTest(p){
+    const center=state.hitAreas.find(h=>h.kind==='inversion'&&Math.hypot(p.x-h.p.x,p.y-h.p.y)<h.r); if(center)return center.el;
+    const axis=state.hitAreas.filter(h=>h.kind==='axis').find(h=>pointSegDistance(p,h.a,h.b)<9); if(axis)return axis.el;
+    const roto=state.hitAreas.find(h=>h.kind==='rotoaxis'&&h.segments.some(([a,b])=>pointSegDistance(p,a,b)<8)); if(roto)return roto.el;
+    const plane=[...state.hitAreas].reverse().find(h=>h.kind==='plane'&&pointInPoly(p,h.poly));return plane?.el||null;
+  }
 
-  function startSymmetry(el) { if(state.animation)return; state.auto=false;$('autoRotate').classList.remove('active');state.animation={el,base:state.modelMatrix,start:performance.now(),duration:el.type==='axis'?820:680}; }
+  function startSymmetry(el) {
+    if(state.animation)return;
+    if(el.type==='identity'){showToast('恒等操作 1：晶体保持不变');return;}
+    state.auto=false;$('autoRotate').classList.remove('active');
+    const duration=el.type==='rotoaxis'?1280:el.type==='axis'?820:el.type==='inversion'?920:680;
+    state.animation={el,base:state.modelMatrix,start:performance.now(),duration};
+  }
 
   function pointerPosition(e){const r=canvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};}
   canvas.addEventListener('pointerdown',e=>{state.dragging=true;state.moved=0;state.lastX=e.clientX;state.lastY=e.clientY;canvas.setPointerCapture(e.pointerId);});
