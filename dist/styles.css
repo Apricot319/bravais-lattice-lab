@@ -437,6 +437,33 @@ button:active {
   background: var(--viewer-soft);
 }
 
+.operation-readout {
+  position: absolute;
+  z-index: 5;
+  top: 14px;
+  left: 14px;
+  max-width: min(360px, calc(100% - 28px));
+  padding: 9px 11px;
+  border: 1px solid rgba(201, 105, 91, 0.42);
+  border-left-width: 3px;
+  border-radius: 8px;
+  color: #7d3f39;
+  background: rgba(255, 249, 247, 0.93);
+  box-shadow: 0 8px 24px rgba(92, 54, 48, 0.09);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-5px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.operation-readout.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 #latticeCanvas {
   position: absolute;
   inset: 0;
@@ -800,6 +827,56 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--muted);
   font-size: 11px;
   line-height: 1.55;
+}
+
+.roto-demo-section > p {
+  margin: 0 0 13px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.roto-demo-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.roto-demo-buttons button {
+  min-width: 0;
+  padding: 9px 5px 8px;
+  border: 1px solid #ccd2df;
+  border-radius: 8px;
+  color: #4b405f;
+  background: #fff;
+  text-align: center;
+}
+
+.roto-demo-buttons button:hover,
+.roto-demo-buttons button.active {
+  border-color: #c9695b;
+  color: #963f35;
+  background: #fff2ee;
+}
+
+.roto-demo-buttons button:active {
+  transform: translateY(1px);
+}
+
+.roto-demo-buttons b,
+.roto-demo-buttons small {
+  display: block;
+}
+
+.roto-demo-buttons b {
+  font: 700 16px/1 ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+.roto-demo-buttons small {
+  margin-top: 5px;
+  color: #858d99;
+  font-size: 9px;
+  white-space: nowrap;
 }
 
 .note-card {

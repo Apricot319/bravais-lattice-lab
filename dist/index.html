@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#f0f1f4">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307101f'/%3E%3Cg stroke='%235eead4' stroke-width='3' fill='none'%3E%3Cpath d='M16 18l22-7 12 13-6 23-23 6L10 39z'/%3E%3Cpath d='M16 18l20 14 14-8M36 32l8 15M36 32L21 53M10 39l26-7'/%3E%3C/g%3E%3Ccircle cx='36' cy='32' r='5' fill='%23fbbf24'/%3E%3C/svg%3E">
   <title>晶格实验室 · Bravais Lab</title>
-  <link rel="stylesheet" href="./styles.css?v=5">
+  <link rel="stylesheet" href="./styles.css?v=6">
 </head>
 <body>
   <div class="app-shell">
@@ -76,6 +76,7 @@
         </div>
         <div class="canvas-wrap" id="canvasWrap">
           <canvas id="latticeCanvas" aria-label="三维晶胞交互视图"></canvas>
+          <div class="operation-readout" id="operationReadout" role="status" aria-live="polite"></div>
           <div class="axis-key" aria-hidden="true"><span class="x">x</span><span class="y">y</span><span class="z">z</span></div>
           <div class="interaction-hint">拖拽旋转；同轴时点中段旋转，点 4̅ 伸出段反演</div>
           <div class="element-tooltip" id="elementTooltip"></div>
@@ -109,8 +110,17 @@
         </section>
         <section class="analysis-section symmetry-summary">
           <div class="section-heading"><h3 class="section-title">对称元素</h3><span id="symmetryCount" class="micro-badge">22 个</span></div>
-          <div id="symmetryTags" class="symmetry-tags"><button><span>1</span><small>×1</small></button><button><span>2</span><small>×6</small></button><button><span>3</span><small>×4</small></button><button><span>4</span><small>×3</small></button><button disabled><span>6</span><small>—</small></button><button><span>i</span><small>×1</small></button><button><span>m</span><small>×9</small></button><button><span>4̅</span><small>×3</small></button></div>
+          <div id="symmetryTags" class="symmetry-tags"><button><span>1</span><small>×1</small></button><button><span>2</span><small>×6</small></button><button><span>3</span><small>×4</small></button><button><span>4</span><small>×3</small></button><button disabled><span>6</span><small>×0</small></button><button><span>i</span><small>×1</small></button><button><span>m</span><small>×9</small></button><button><span>4̅</span><small>×3</small></button></div>
           <p id="symmetryHint">八种基本操作固定列出；高亮项属于当前晶胞，点击即可播放。</p>
+        </section>
+        <section class="analysis-section roto-demo-section">
+          <div class="section-heading"><h3 class="section-title">旋转反演演示</h3><span class="micro-badge">连续</span></div>
+          <p>连续执行 n 次旋转反演，观察“旋转后反演”的累积结果。概念演示不代表当前晶体一定具有该反轴。</p>
+          <div class="roto-demo-buttons">
+            <button type="button" data-roto-demo="3"><b>3̅</b><small>连续 3 次</small></button>
+            <button type="button" data-roto-demo="4"><b>4̅</b><small>连续 4 次</small></button>
+            <button type="button" data-roto-demo="6"><b>6̅</b><small>连续 6 次</small></button>
+          </div>
         </section>
         <section class="note-card"><span>i</span><p id="structureNote">当前显示布拉维格点。自定义参数的堆积率按等半径硬球、最近邻相切估算。</p></section>
       </aside>
@@ -122,6 +132,6 @@
     <div id="templateGrid" class="template-grid"></div>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./app.js?v=5"></script>
+  <script src="./app.js?v=6"></script>
 </body>
 </html>

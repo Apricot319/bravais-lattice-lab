@@ -4,6 +4,7 @@
   const $ = id => document.getElementById(id);
   const canvas = $('latticeCanvas');
   const ctx = canvas.getContext('2d');
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   canvas.tabIndex = 0;
 
   const COLORS = ['#94d6c1', '#aeb9e2', '#f0c978', '#ef9c93', '#8fc1e8'];
@@ -49,7 +50,7 @@
   const state = {
     yaw:-.62, pitch:.58, zoom:1, perspective:.28, atomSize:.92, auto:false, dragging:false, moved:0,
     modelMatrix:[[1,0,0],[0,1,0],[0,0,1]], displayMatrix:[[1,0,0],[0,1,0],[0,0,1]],
-    model:null, currentPreset:null, sceneRadius:1, hitAreas:[], hover:null, animation:null, dpr:1, toastTimer:null
+    model:null, currentPreset:null, sceneRadius:1, hitAreas:[], hover:null, animation:null, symmetryQueue:[], sequence:null, dpr:1, toastTimer:null
   };
 
   const V = {
@@ -112,6 +113,29 @@
       }
     }
     return out;
+  }
+
+  function hexagonalDisplayGeometry(model) {
+    const [a,,c]=model.p, species=model.id==='hcp'?'Mg':(model.species||'格点');
+    const color=model.id==='hcp'?'#94d6c1':'#94d6c1', bottom=[],top=[];
+    for(let k=0;k<6;k++) {
+      const angle=k*Math.PI/3;
+      bottom.push([a*Math.cos(angle),a*Math.sin(angle),-c/2]);
+      top.push([a*Math.cos(angle),a*Math.sin(angle),c/2]);
+    }
+    const cellPoints=[...bottom,...top],edges=[];
+    for(let k=0;k<6;k++) {
+      const next=(k+1)%6;
+      edges.push([bottom[k],bottom[next]],[top[k],top[next]],[bottom[k],top[k]]);
+    }
+    const atoms=[...cellPoints,[0,0,-c/2],[0,0,c/2]].map((pos,index)=>({f:null,s:species,c:color,pos,displayKey:`hex-${index}`}));
+    if(model.id==='hcp') {
+      for(let k=0;k<3;k++) {
+        const angle=Math.PI/6+k*Math.PI*2/3;
+        atoms.push({f:null,s:'Mg',c:color,pos:[a/Math.sqrt(3)*Math.cos(angle),a/Math.sqrt(3)*Math.sin(angle),0],displayKey:`hcp-mid-${k}`});
+      }
+    }
+    return {cellPoints,edges,atoms};
   }
 
   function nearestBravais(model) {
@@ -249,11 +273,17 @@
       model.displayAtoms=boundaryLatticePoints(source.center).map(f=>({f,s:source.species||'格点',c:color,pos:fracToCart(f,model.vectors,true)}));
       model.metrics=nearestBravais(model);
     }
+    const hexGeometry=model.system==='hexagonal'?hexagonalDisplayGeometry(model):null;
+    if(hexGeometry) model.displayAtoms=hexGeometry.atoms;
     model.bonds=nearestBonds(model.displayAtoms,model.metrics.nearest);
     model.ws=wsPolyhedron(model); model.symmetry=symmetryElements(model);
-    const cellCorners=[]; for(const x of [0,1]) for(const y of [0,1]) for(const z of [0,1]) cellCorners.push(fracToCart([x,y,z],model.vectors,true));
-    model.cellCorners=cellCorners;
-    state.sceneRadius=Math.max(1,...cellCorners.map(V.norm),...model.ws.vertices.map(V.norm))*1.16;
+    if(hexGeometry) {
+      model.cellCorners=hexGeometry.cellPoints;model.cellEdges=hexGeometry.edges;
+    } else {
+      const cellCorners=[];for(const x of [0,1]) for(const y of [0,1]) for(const z of [0,1]) cellCorners.push(fracToCart([x,y,z],model.vectors,true));
+      model.cellCorners=cellCorners;model.cellEdges=CELL_EDGES.map(([a,b])=>[cellCorners[a],cellCorners[b]]);
+    }
+    state.sceneRadius=Math.max(1,...model.cellCorners.map(V.norm),...model.ws.vertices.map(V.norm))*1.16;
     return model;
   }
 
@@ -263,6 +293,7 @@
   function updateCustom(showMessage=true) {
     const p=inputParams();
     if(!validateParams(p)){ showToast('参数不能构成有效的三维晶胞，请检查长度与夹角。',true); return false; }
+    clearSymmetryPlayback();
     const result=classify(p,$('centering').value);
     if(result.adjusted){ $('centering').value=result.center; if(showMessage) showToast(`该中心化与${SYSTEM_NAMES[result.system]}不构成独立格子，已约化为 ${result.code}。`); }
     const custom={id:'custom',...result,p,example:'自定义参数',species:'X'};
@@ -274,7 +305,7 @@
   function loadPreset(id,announce=false) {
     const preset=[...BRAVAIS,...STRUCTURES].find(x=>x.id===id) || BRAVAIS.find(x=>x.id==='cP');
     state.currentPreset=preset; setInputs(preset.p,preset.center); $('templateSelect').value=preset.id;
-    state.modelMatrix=[[1,0,0],[0,1,0],[0,0,1]]; state.animation=null;
+    state.modelMatrix=[[1,0,0],[0,1,0],[0,0,1]];clearSymmetryPlayback();
     applyModel(createModel(preset));
     document.querySelectorAll('.template-card').forEach(c=>c.classList.toggle('active',c.dataset.id===preset.id));
     if(announce) showToast(`已载入 ${preset.name} · ${preset.example}`);
@@ -291,7 +322,9 @@
     $('packingFraction').textContent=model.metrics.packing==null?'暂无':formatNumber(model.metrics.packing*100,1);
     $('packingUnit').textContent=model.metrics.packing==null?'':'%';
     updateCoordination(model); updateSymmetrySummary(model);
-    if(model.kind==='structure') $('structureNote').textContent='当前模板显示晶体的完整基元；离子晶体的堆积率取决于离子半径，因此不作唯一数值估算。';
+    if(model.system==='hexagonal'&&model.id==='hcp') $('structureNote').textContent='视图采用含 3 个原胞的完整六方对称棱柱，并显示 hcp 中间层 3 个原子；体积和格点统计仍按输入的原始晶胞计算。';
+    else if(model.system==='hexagonal') $('structureNote').textContent='视图采用由 3 个原胞拼成的六方对称棱柱，以直观显示六重轴；体积、格点数和堆积率仍按输入的原始晶胞计算。';
+    else if(model.kind==='structure') $('structureNote').textContent='当前模板显示晶体的完整基元；离子晶体的堆积率取决于离子半径，因此不作唯一数值估算。';
     else if(model.kind==='bravais'&&!['cP','cI','cF'].includes(model.code)) $('structureNote').textContent=`当前显示 ${model.code} 布拉维格点；${model.example} 作为代表材料，其复杂原子基元已简化。`;
     else $('structureNote').textContent='等半径硬球按最近邻相切估算堆积率；边界格点按晶胞共享关系计数。';
   }
@@ -311,7 +344,7 @@
       {symbol:'m',title:'镜面反射',type:'plane',count:p.length,el:p[0]},
       {symbol:'4\u0305',title:'四重旋转反演',type:'rotoaxis',order:4,count:r.length,el:r[0]}
     ];
-    $('symmetryTags').innerHTML=catalog.map((op,index)=>`<button type="button" data-operation="${index}" title="${op.title}" ${op.el?'':'disabled'}><span>${op.symbol}</span>${op.el?`<small>×${op.count}</small>`:'<small>—</small>'}</button>`).join('');
+    $('symmetryTags').innerHTML=catalog.map((op,index)=>`<button type="button" data-operation="${index}" title="${op.title}" ${op.el?'':'disabled'}><span>${op.symbol}</span>${op.el?`<small>×${op.count}</small>`:'<small>×0</small>'}</button>`).join('');
     $('symmetryCount').textContent=`${a.length+p.length+i.length+r.length} 个元素`;
     $('symmetryHint').textContent='八种基本操作固定列出；高亮项属于当前晶胞，点击即可播放。1 表示恒等操作。';
     $('symmetryTags').querySelectorAll('button:not(:disabled)').forEach(btn=>btn.addEventListener('click',()=>startSymmetry(catalog[+btn.dataset.operation].el)));
@@ -327,14 +360,14 @@
     ctx.setTransform(state.dpr,0,0,state.dpr,0,0);
   }
 
-  function viewTransform(v) {
-    v=M.vec(state.displayMatrix,v);
+  function viewTransform(v,matrix=state.displayMatrix) {
+    v=M.vec(matrix,v);
     const cy=Math.cos(state.yaw),sy=Math.sin(state.yaw),cp=Math.cos(state.pitch),sp=Math.sin(state.pitch);
     const x=v[0]*cy-v[2]*sy,z=v[0]*sy+v[2]*cy,y=v[1]*cp-z*sp; return [x,y,v[1]*sp+z*cp];
   }
 
-  function project(v) {
-    const q=viewTransform(v), rect=canvas.getBoundingClientRect(), radius=state.sceneRadius||1;
+  function project(v,matrix=state.displayMatrix) {
+    const q=viewTransform(v,matrix), rect=canvas.getBoundingClientRect(), radius=state.sceneRadius||1;
     const s=Math.min(rect.width,rect.height)*.38*state.zoom/radius, perspective=Math.max(.76,1+(q[2]/radius)*.14*state.perspective);
     return {x:rect.width/2+q[0]*s/perspective,y:rect.height/2+q[1]*s/perspective,z:q[2],p:perspective};
   }
@@ -372,6 +405,24 @@
 
   const CELL_EDGES=[[0,4],[4,6],[6,2],[2,0],[1,5],[5,7],[7,3],[3,1],[0,1],[4,5],[6,7],[2,3]];
 
+  function drawAxisSymbol(point,order,color,improper=false,hovered=false) {
+    const size=(hovered?6.2:5.2)+(order===6?.7:0);
+    ctx.save();ctx.translate(point.x,point.y);ctx.lineJoin='round';ctx.lineWidth=improper?2:1;
+    ctx.fillStyle=improper?'rgba(255,255,255,.94)':color;ctx.strokeStyle=color;ctx.beginPath();
+    if(order===2) ctx.ellipse(0,0,size,size*.58,0,0,Math.PI*2);
+    else {
+      const sides=order===3?3:order===4?4:6,offset=order===4?Math.PI/4:-Math.PI/2;
+      for(let k=0;k<sides;k++) {
+        const angle=offset+k*Math.PI*2/sides,x=Math.cos(angle)*size,y=Math.sin(angle)*size;
+        if(k)ctx.lineTo(x,y);else ctx.moveTo(x,y);
+      }
+      ctx.closePath();
+    }
+    ctx.fill();ctx.stroke();
+    if(improper){ctx.fillStyle=color;ctx.beginPath();ctx.arc(0,0,1.8,0,Math.PI*2);ctx.fill();}
+    ctx.restore();
+  }
+
   function drawSymmetry(model) {
     state.hitAreas=[]; const L=state.sceneRadius*.94;
     if($('togglePlanes').checked) for(const el of model.symmetry.planes) {
@@ -380,7 +431,9 @@
       state.hitAreas.push({el,kind:'plane',poly});
     }
     if($('toggleImproper').checked) {
-      for(const el of model.symmetry.rotoAxes) {
+      const demoAxis=state.sequence?.kind==='demo'?state.sequence.el:null;
+      const rotoAxes=demoAxis&&!model.symmetry.rotoAxes.includes(demoAxis)?[...model.symmetry.rotoAxes,demoAxis]:model.symmetry.rotoAxes;
+      for(const el of rotoAxes) {
         const outerL=L*1.28,outerA=project(V.scale(el.dir,-outerL)),outerB=project(V.scale(el.dir,outerL));
         const overlap=model.symmetry.axes.some(axis=>Math.abs(V.dot(axis.dir,el.dir))>.999);
         const innerA=overlap?project(V.scale(el.dir,-L)):outerA,innerB=overlap?project(V.scale(el.dir,L)):outerB;
@@ -391,15 +444,15 @@
         }
         ctx.strokeStyle=hovered?'rgba(190,73,61,.98)':'rgba(201,105,91,.88)';ctx.lineWidth=hovered?3.6:2.5;ctx.setLineDash([4,3]);
         for(const [a,b] of segments){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
-        ctx.setLineDash([]);ctx.fillStyle=hovered?'#b94f43':'#c9695b';
-        for(const p of [outerA,outerB]){ctx.beginPath();ctx.moveTo(p.x,p.y-4.8);ctx.lineTo(p.x+4.8,p.y);ctx.lineTo(p.x,p.y+4.8);ctx.lineTo(p.x-4.8,p.y);ctx.closePath();ctx.fill();}
-        ctx.font='700 12px ui-monospace,monospace';ctx.fillText('4\u0305',outerB.x+7,outerB.y-5);ctx.restore();
-        state.hitAreas.push({el,kind:'rotoaxis',segments});
+        ctx.setLineDash([]);const symbolColor=hovered?'#b94f43':'#c9695b';ctx.fillStyle=symbolColor;
+        for(const p of [outerA,outerB]) drawAxisSymbol(p,el.order,symbolColor,true,hovered);
+        ctx.font='700 12px ui-monospace,monospace';ctx.fillText(`${el.order}\u0305`,outerB.x+7,outerB.y-5);ctx.restore();
+        if(!el.demo) state.hitAreas.push({el,kind:'rotoaxis',segments});
       }
     }
     if($('toggleAxes').checked) for(const el of model.symmetry.axes) {
       const a=V.scale(el.dir,-L),b=V.scale(el.dir,L),hovered=state.hover===el,[p,q]=line(a,b,hovered?'rgba(183,128,26,.98)':'rgba(100,83,154,.78)',hovered?3:1.8,[7,5]);
-      ctx.save();ctx.fillStyle=hovered?'#a96f12':'#65549a';ctx.beginPath();ctx.arc(q.x,q.y,hovered?4.2:3.2,0,Math.PI*2);ctx.fill();ctx.font='700 11px ui-monospace,monospace';ctx.fillText(`C${el.order}`,q.x+6,q.y-5);ctx.restore();
+      ctx.save();const symbolColor=hovered?'#a96f12':'#65549a';drawAxisSymbol(p,el.order,symbolColor,false,hovered);drawAxisSymbol(q,el.order,symbolColor,false,hovered);ctx.fillStyle=symbolColor;ctx.font='700 11px ui-monospace,monospace';ctx.fillText(`C${el.order}`,q.x+7,q.y-6);ctx.restore();
       state.hitAreas.push({el,kind:'axis',a:p,b:q});
     }
     if($('toggleImproper').checked) {
@@ -430,6 +483,78 @@
     return [[1,0,0],[0,1,0],[0,0,1]];
   }
 
+  function chooseTracer(el) {
+    const atoms=state.model?.displayAtoms||[];
+    if(!atoms.length||!['inversion','rotoaxis'].includes(el.type)) return null;
+    return atoms.reduce((best,atom)=>{
+      const along=el.dir?V.scale(el.dir,V.dot(atom.pos,el.dir)):[0,0,0];
+      const radial=el.dir?V.norm(V.sub(atom.pos,along)):V.norm(atom.pos),score=radial+V.norm(atom.pos)*.18;
+      return !best||score>best.score?{atom,score}:best;
+    },null)?.atom||null;
+  }
+
+  function screenPath(points,color,width=1.5,dash=[5,5]) {
+    ctx.save();ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dash);ctx.beginPath();
+    points.forEach((p,index)=>index?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();ctx.restore();
+  }
+
+  function screenRing(point,color,r=8,fill='rgba(255,255,255,.76)') {
+    ctx.save();ctx.fillStyle=fill;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(point.x,point.y,r,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore();
+  }
+
+  function drawSymmetryTracer() {
+    const animation=state.animation,sequence=state.sequence,atom=sequence?.tracer;
+    if(!animation||!atom||reduceMotion) return;
+    const el=animation.el,start=project(atom.pos,animation.base),center=project([0,0,0],animation.base);
+    const finalMatrix=M.mul(animation.base,symmetryMatrix(el,1)),target=project(atom.pos,finalMatrix),current=project(atom.pos);
+    ctx.save();ctx.font='700 11px ui-monospace,monospace';ctx.textBaseline='middle';
+    if(el.type==='rotoaxis') {
+      const rotatedMatrix=M.mul(animation.base,M.rot(el.dir,Math.PI*2/el.order)),rotated=project(atom.pos,rotatedMatrix);
+      const mx=(start.x+rotated.x)/2,my=(start.y+rotated.y)/2,dx=rotated.x-start.x,dy=rotated.y-start.y,len=Math.hypot(dx,dy)||1;
+      ctx.strokeStyle='rgba(101,84,154,.62)';ctx.lineWidth=1.6;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(start.x,start.y);ctx.quadraticCurveTo(mx-dy/len*24,my+dx/len*24,rotated.x,rotated.y);ctx.stroke();
+      screenPath([rotated,center,target],'rgba(201,105,91,.68)',1.8,[5,4]);
+      screenRing(start,'rgba(101,84,154,.72)',6);screenRing(rotated,'rgba(101,84,154,.86)',7);screenRing(target,'rgba(201,105,91,.92)',7);
+      ctx.fillStyle='#65549a';ctx.fillText('r',start.x+9,start.y-9);ctx.fillText('Rr',rotated.x+9,rotated.y-9);ctx.fillStyle='#b95b4f';ctx.fillText('−Rr',target.x+9,target.y-9);
+    } else {
+      screenPath([start,center,target],'rgba(201,105,91,.72)',1.9,[5,4]);
+      screenRing(start,'rgba(101,84,154,.78)',7);screenRing(target,'rgba(201,105,91,.92)',7);
+      ctx.fillStyle='#65549a';ctx.fillText('r',start.x+9,start.y-9);ctx.fillStyle='#b95b4f';ctx.fillText('−r',target.x+9,target.y-9);
+    }
+    ctx.shadowColor='rgba(255,255,255,.96)';ctx.shadowBlur=8;ctx.strokeStyle='#d05f51';ctx.lineWidth=3;ctx.beginPath();ctx.arc(current.x,current.y,13,0,Math.PI*2);ctx.stroke();
+    ctx.shadowColor='rgba(208,95,81,.3)';ctx.shadowBlur=12;ctx.strokeStyle='rgba(255,255,255,.95)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(current.x,current.y,16,0,Math.PI*2);ctx.stroke();ctx.restore();
+  }
+
+  function updateOperationReadout(e) {
+    const box=$('operationReadout'),sequence=state.sequence,el=state.animation?.el;
+    if(!box||!sequence||!el)return;
+    const count=sequence.total>1?` ${sequence.current}/${sequence.total}`:'';
+    const operation=el.type==='rotoaxis'?`${el.order}\u0305`:el.type==='axis'?`C${el.order}`:el.type==='inversion'?'i':el.label;
+    let phase=el.label;
+    if(el.type==='inversion') phase='中心反演：追踪原子 r → −r';
+    if(el.type==='rotoaxis') phase=e<=.58?`旋转 ${formatNumber(360/el.order,0)}°`:'中心反演：Rr → −Rr';
+    box.textContent=`${operation}${count}  ${phase}`;box.classList.add('show');
+  }
+
+  function hideOperationReadout(){const box=$('operationReadout');if(box){box.classList.remove('show');box.textContent='';}}
+  function setDemoButtonState(order=null){document.querySelectorAll('[data-roto-demo]').forEach(button=>button.classList.toggle('active',+button.dataset.rotoDemo===order));}
+  function clearSymmetryPlayback(){state.animation=null;state.symmetryQueue=[];state.sequence=null;hideOperationReadout();setDemoButtonState();}
+  function symmetryDuration(el){return el.type==='rotoaxis'?1280:el.type==='axis'?820:el.type==='inversion'?980:680;}
+  function beginSymmetry(el){state.animation={el,base:state.modelMatrix,start:performance.now(),duration:symmetryDuration(el)};}
+
+  function finishSymmetry() {
+    const animation=state.animation,sequence=state.sequence;state.modelMatrix=state.displayMatrix;
+    if(state.symmetryQueue.length) {
+      const next=state.symmetryQueue.shift();sequence.current+=1;beginSymmetry(next);return;
+    }
+    state.animation=null;hideOperationReadout();setDemoButtonState();
+    if(sequence?.kind==='demo') {
+      const result=sequence.el.order%2?'结果等效于中心反演':'晶体回到原取向';
+      showToast(`${sequence.el.order}\u0305 连续 ${sequence.total} 次完成，${result}`);
+    } else if(sequence?.total>1) showToast(`已连续执行 ${sequence.el.label} ${sequence.total} 次`);
+    else if(sequence) showToast(`已执行 ${sequence.el.label} 对称操作`);
+    state.sequence=null;
+  }
+
   function render(t) {
     const rect=canvas.getBoundingClientRect();ctx.clearRect(0,0,rect.width,rect.height);
     if(!state.model){requestAnimationFrame(render);return;}
@@ -438,14 +563,16 @@
       const u=Math.min(1,(t-state.animation.start)/state.animation.duration),e=u<.5?2*u*u:1-((-2*u+2)**2)/2;
       const op=symmetryMatrix(state.animation.el,e);
       state.displayMatrix=M.mul(state.animation.base,op);
-      if(u>=1){state.modelMatrix=state.displayMatrix;const label=state.animation.el.label;state.animation=null;showToast(`已执行 ${label} 对称操作`);}
+      updateOperationReadout(e);
+      if(u>=1)finishSymmetry();
     } else state.displayMatrix=state.modelMatrix;
 
     drawSymmetry(state.model);
-    CELL_EDGES.forEach(([a,b])=>line(state.model.cellCorners[a],state.model.cellCorners[b],'rgba(84,98,117,.46)',1.15));
+    state.model.cellEdges.forEach(([a,b])=>line(a,b,'rgba(84,98,117,.46)',1.15));
     if($('toggleWS').checked) state.model.ws.edges.forEach(([a,b])=>line(state.model.ws.vertices[a],state.model.ws.vertices[b],'rgba(177,128,35,.82)',1.45));
     const bonds=[...state.model.bonds].sort((a,b)=>viewTransform(V.scale(V.add(b.a,b.b),.5))[2]-viewTransform(V.scale(V.add(a.a,a.b),.5))[2]); bonds.forEach(drawBond);
     const atoms=[...state.model.displayAtoms].sort((a,b)=>viewTransform(b.pos)[2]-viewTransform(a.pos)[2]); atoms.forEach(drawAtom);
+    drawSymmetryTracer();
     drawInversionCenters(state.model);
     requestAnimationFrame(render);
   }
@@ -459,12 +586,29 @@
     const plane=[...state.hitAreas].reverse().find(h=>h.kind==='plane'&&pointInPoly(p,h.poly));return plane?.el||null;
   }
 
-  function startSymmetry(el) {
-    if(state.animation)return;
+  function startSymmetry(el,options={}) {
     if(el.type==='identity'){showToast('恒等操作 1：晶体保持不变');return;}
+    if(state.animation) {
+      if(state.sequence?.kind==='manual'&&state.sequence.el===el) {
+        state.symmetryQueue.push(el);state.sequence.total+=1;showToast(`已排入第 ${state.sequence.total} 次 ${el.label}`);
+      } else showToast('当前演示正在播放，请等待完成');
+      return;
+    }
     state.auto=false;$('autoRotate').classList.remove('active');
-    const duration=el.type==='rotoaxis'?1280:el.type==='axis'?820:el.type==='inversion'?920:680;
-    state.animation={el,base:state.modelMatrix,start:performance.now(),duration};
+    const repeats=Math.max(1,options.repeats||1);
+    if(reduceMotion) {
+      for(let k=0;k<repeats;k++)state.modelMatrix=M.mul(state.modelMatrix,symmetryMatrix(el,1));
+      state.displayMatrix=state.modelMatrix;showToast(options.demo?`${el.order}\u0305 连续演示已完成`:`已执行 ${el.label} 对称操作`);return;
+    }
+    state.symmetryQueue=Array.from({length:repeats-1},()=>el);
+    state.sequence={kind:options.demo?'demo':'manual',el,total:repeats,current:1,tracer:chooseTracer(el)};
+    if(options.demo)setDemoButtonState(el.order);beginSymmetry(el);
+  }
+
+  function startRotoDemo(order) {
+    const existing=state.model.symmetry.rotoAxes.find(el=>el.order===order&&Math.abs(V.dot(el.dir,[0,0,1]))>.999);
+    const el=existing||{type:'rotoaxis',dir:[0,0,1],order,label:`${order}\u0305 · 概念演示`,demo:true};
+    startSymmetry(el,{demo:true,repeats:order});
   }
 
   function pointerPosition(e){const r=canvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};}
@@ -489,8 +633,9 @@
   let inputTimer; ['paramA','paramB','paramC','paramAlpha','paramBeta','paramGamma'].forEach(id=>$(id).addEventListener('input',()=>{clearTimeout(inputTimer);inputTimer=setTimeout(()=>updateCustom(false),280);}));
   $('centering').addEventListener('change',()=>updateCustom(false));
   $('resetParams').addEventListener('click',()=>loadPreset(state.currentPreset?.id||'cP',true));
-  $('resetView').addEventListener('click',()=>{state.yaw=-.62;state.pitch=.58;state.zoom=1;state.modelMatrix=[[1,0,0],[0,1,0],[0,0,1]];});
+  $('resetView').addEventListener('click',()=>{clearSymmetryPlayback();state.yaw=-.62;state.pitch=.58;state.zoom=1;state.modelMatrix=[[1,0,0],[0,1,0],[0,0,1]];});
   $('autoRotate').addEventListener('click',e=>{state.auto=!state.auto;e.currentTarget.classList.toggle('active',state.auto);});
+  document.querySelectorAll('[data-roto-demo]').forEach(button=>button.addEventListener('click',()=>startRotoDemo(+button.dataset.rotoDemo)));
   $('atomSize').addEventListener('input',e=>{state.atomSize=+e.target.value/100;$('atomSizeOutput').value=`${e.target.value}%`;});
   $('perspective').addEventListener('input',e=>{state.perspective=+e.target.value/100;$('perspectiveOutput').value=`${e.target.value}%`;});
   $('fullscreen').addEventListener('click',()=>document.fullscreenElement?document.exitFullscreen():$('canvasWrap').requestFullscreen?.());
