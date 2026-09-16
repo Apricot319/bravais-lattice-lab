@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="输入晶胞参数，识别布拉维格子并交互探索晶胞、Wigner–Seitz 原胞与对称元素。">
+  <meta name="theme-color" content="#07101f">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307101f'/%3E%3Cg stroke='%235eead4' stroke-width='3' fill='none'%3E%3Cpath d='M16 18l22-7 12 13-6 23-23 6L10 39z'/%3E%3Cpath d='M16 18l20 14 14-8M36 32l8 15M36 32L21 53M10 39l26-7'/%3E%3C/g%3E%3Ccircle cx='36' cy='32' r='5' fill='%23fbbf24'/%3E%3C/svg%3E">
+  <title>晶格实验室 · Bravais Lab</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div>
+        <h1>晶格实验室</h1>
+        <p>Bravais lattice explorer</p>
+      </div>
+      <div class="status-pill"><i></i><span>实时计算</span></div>
+    </header>
+
+    <main class="workspace">
+      <aside class="panel controls-panel">
+        <section class="panel-section template-section">
+          <div class="section-heading">
+            <span class="eyebrow">01 / 结构</span>
+            <button class="text-button" id="openLibrary" type="button">模板库 <span>14</span></button>
+          </div>
+          <label class="field-label" for="templateSelect">结构模板</label>
+          <select id="templateSelect" class="select-control">
+            <option value="cP">简单立方 · α-Po</option>
+            <option value="cI">体心立方 · W</option>
+            <option value="cF">面心立方 · Cu</option>
+          </select>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading"><span class="eyebrow">02 / 晶胞参数</span><button id="resetParams" class="icon-button" type="button" aria-label="重置参数">↺</button></div>
+          <div class="parameter-grid">
+            <label>a <span>Å</span><input id="paramA" type="number" value="3.35" min="0.1" step="0.01"></label>
+            <label>b <span>Å</span><input id="paramB" type="number" value="3.35" min="0.1" step="0.01"></label>
+            <label>c <span>Å</span><input id="paramC" type="number" value="3.35" min="0.1" step="0.01"></label>
+            <label>α <span>°</span><input id="paramAlpha" type="number" value="90" min="1" max="179" step="0.1"></label>
+            <label>β <span>°</span><input id="paramBeta" type="number" value="90" min="1" max="179" step="0.1"></label>
+            <label>γ <span>°</span><input id="paramGamma" type="number" value="90" min="1" max="179" step="0.1"></label>
+          </div>
+          <label class="field-label" for="centering">点阵中心化</label>
+          <select id="centering" class="select-control">
+            <option value="P">P · 原始</option>
+            <option value="I">I · 体心</option>
+            <option value="F">F · 面心</option>
+            <option value="C">C · 底心</option>
+            <option value="R">R · 菱方</option>
+          </select>
+          <button class="primary-button" id="classifyButton" type="button">判定布拉维格子 <span>→</span></button>
+        </section>
+
+        <section class="panel-section compact-section">
+          <span class="eyebrow">03 / 显示</span>
+          <label class="toggle-row"><span><b>Wigner–Seitz 原胞</b><small>第一布里渊区的实空间对应</small></span><input id="toggleWS" type="checkbox" checked><i></i></label>
+          <label class="toggle-row"><span><b>旋转轴</b><small>点击轴执行一次旋转</small></span><input id="toggleAxes" type="checkbox" checked><i></i></label>
+          <label class="toggle-row"><span><b>镜面</b><small>点击镜面执行一次反射</small></span><input id="togglePlanes" type="checkbox"><i></i></label>
+        </section>
+      </aside>
+
+      <section class="viewer-card">
+        <div class="viewer-toolbar">
+          <div><span class="structure-kicker">当前结构</span><strong id="viewerTitle">简单立方</strong></div>
+          <div class="viewer-actions">
+            <button type="button" id="resetView" title="重置视角" aria-label="重置视角">⌂</button>
+            <button type="button" id="autoRotate" class="active" title="自动旋转" aria-label="自动旋转">⟳</button>
+            <button type="button" id="fullscreen" title="全屏" aria-label="全屏">⛶</button>
+          </div>
+        </div>
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="latticeCanvas" aria-label="三维晶胞交互视图"></canvas>
+          <div class="axis-key" aria-hidden="true"><span class="x">x</span><span class="y">y</span><span class="z">z</span></div>
+          <div class="interaction-hint">拖拽旋转 · 滚轮缩放 · 点击对称元素</div>
+          <div class="element-tooltip" id="elementTooltip"></div>
+        </div>
+        <div class="viewer-footer">
+          <label>原子半径 <input id="atomSize" type="range" min="45" max="145" value="92"><output id="atomSizeOutput">92%</output></label>
+          <label>透视强度 <input id="perspective" type="range" min="0" max="100" value="62"><output id="perspectiveOutput">62%</output></label>
+          <div class="legend"><span class="atom-dot"></span>格点原子 <span class="ws-line"></span>WS 边界 <span class="sym-line"></span>对称轴</div>
+        </div>
+      </section>
+
+      <aside class="panel analysis-panel">
+        <section class="result-hero">
+          <span class="eyebrow">判定结果</span>
+          <div class="result-code" id="bravaisCode">cP</div>
+          <h2 id="bravaisName">简单立方</h2>
+          <p id="bravaisSystem">立方晶系 · 原始点阵</p>
+          <div class="confidence"><span>参数匹配度</span><b id="confidenceValue">100%</b><i><em id="confidenceBar"></em></i></div>
+        </section>
+        <section class="metric-grid">
+          <div><span>晶胞体积</span><strong id="cellVolume">37.60</strong><small>Å³</small></div>
+          <div><span>堆积率</span><strong id="packingFraction">52.4</strong><small id="packingUnit">%</small></div>
+          <div><span>最近邻距</span><strong id="neighborDistance">3.35</strong><small>Å</small></div>
+          <div><span>晶胞内格点</span><strong id="latticePoints">1</strong><small>个</small></div>
+        </section>
+        <section class="analysis-section">
+          <div class="section-heading"><span class="eyebrow">最近邻配位</span><span class="micro-badge">自动</span></div>
+          <div id="coordinationList" class="coordination-list">
+            <div class="atom-row"><span class="atom-swatch teal"></span><div><b>Po</b><small>最近邻 6 · 同种原子</small></div><strong>CN 6</strong></div>
+          </div>
+        </section>
+        <section class="analysis-section symmetry-summary">
+          <div class="section-heading"><span class="eyebrow">对称元素</span><span id="symmetryCount" class="micro-badge">22 个</span></div>
+          <div id="symmetryTags" class="symmetry-tags"><button>C₄ ×3</button><button>C₃ ×4</button><button>C₂ ×6</button><button>m ×9</button></div>
+          <p id="symmetryHint">在视图中点击彩色轴或镜面，即可执行对应的对称操作。</p>
+        </section>
+        <section class="note-card"><span>i</span><p id="structureNote">当前显示布拉维格点。自定义参数的堆积率按等半径硬球、最近邻相切估算。</p></section>
+      </aside>
+    </main>
+  </div>
+
+  <dialog id="templateDialog" class="template-dialog">
+    <div class="dialog-header"><div><span class="eyebrow">结构模板库</span><h2>14 种布拉维格子</h2></div><button id="closeLibrary" type="button" aria-label="关闭">×</button></div>
+    <div id="templateGrid" class="template-grid"></div>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
