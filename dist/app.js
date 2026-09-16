@@ -444,15 +444,15 @@
         }
         ctx.strokeStyle=hovered?'rgba(190,73,61,.98)':'rgba(201,105,91,.88)';ctx.lineWidth=hovered?3.6:2.5;ctx.setLineDash([4,3]);
         for(const [a,b] of segments){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
-        ctx.setLineDash([]);const symbolColor=hovered?'#b94f43':'#c9695b';ctx.fillStyle=symbolColor;
+        ctx.setLineDash([]);const symbolColor=hovered?'#b94f43':'#c9695b';
         for(const p of [outerA,outerB]) drawAxisSymbol(p,el.order,symbolColor,true,hovered);
-        ctx.font='700 12px ui-monospace,monospace';ctx.fillText(`${el.order}\u0305`,outerB.x+7,outerB.y-5);ctx.restore();
+        ctx.restore();
         if(!el.demo) state.hitAreas.push({el,kind:'rotoaxis',segments});
       }
     }
     if($('toggleAxes').checked) for(const el of model.symmetry.axes) {
       const a=V.scale(el.dir,-L),b=V.scale(el.dir,L),hovered=state.hover===el,[p,q]=line(a,b,hovered?'rgba(183,128,26,.98)':'rgba(100,83,154,.78)',hovered?3:1.8,[7,5]);
-      ctx.save();const symbolColor=hovered?'#a96f12':'#65549a';drawAxisSymbol(p,el.order,symbolColor,false,hovered);drawAxisSymbol(q,el.order,symbolColor,false,hovered);ctx.fillStyle=symbolColor;ctx.font='700 11px ui-monospace,monospace';ctx.fillText(`C${el.order}`,q.x+7,q.y-6);ctx.restore();
+      ctx.save();const symbolColor=hovered?'#a96f12':'#65549a';drawAxisSymbol(p,el.order,symbolColor,false,hovered);drawAxisSymbol(q,el.order,symbolColor,false,hovered);ctx.restore();
       state.hitAreas.push({el,kind:'axis',a:p,b:q});
     }
     if($('toggleImproper').checked) {
@@ -525,8 +525,7 @@
     ctx.save();
     if(el.type==='rotoaxis') {
       const rotatedMatrix=M.mul(animation.base,M.rot(el.dir,Math.PI*2/el.order)),rotated=project(atom.pos,rotatedMatrix);
-      const mx=(start.x+rotated.x)/2,my=(start.y+rotated.y)/2,dx=rotated.x-start.x,dy=rotated.y-start.y,len=Math.hypot(dx,dy)||1;
-      drawGlowPath(path=>{path.moveTo(start.x,start.y);path.quadraticCurveTo(mx-dy/len*24,my+dx/len*24,rotated.x,rotated.y);path.lineTo(center.x,center.y);path.lineTo(target.x,target.y);});
+      if((animation.progress||0)>.58) drawGlowPath(path=>{path.moveTo(rotated.x,rotated.y);path.lineTo(center.x,center.y);path.lineTo(target.x,target.y);});
     } else {
       drawGlowPath(path=>{path.moveTo(start.x,start.y);path.lineTo(center.x,center.y);path.lineTo(target.x,target.y);});
     }
@@ -587,6 +586,7 @@
     if(state.animation) {
       const {u,e,waiting}=animationProgress(state.animation,t);
       const op=symmetryMatrix(state.animation.el,e);
+      state.animation.progress=e;
       state.displayMatrix=M.mul(state.animation.base,op);
       updateOperationReadout(e,u,waiting);
       if(u>=1&&!waiting)finishSymmetry();
