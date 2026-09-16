@@ -329,7 +329,11 @@
   function polygon(points,fill,stroke,width=1,dash=[]) { const p=points.map(project);ctx.save();ctx.fillStyle=fill;ctx.strokeStyle=stroke;ctx.lineWidth=width;ctx.setLineDash(dash);ctx.beginPath();p.forEach((v,i)=>i?ctx.lineTo(v.x,v.y):ctx.moveTo(v.x,v.y));ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();return p; }
 
   function mixColor(hex,target,amount) {
-    const parse=value=>{const n=parseInt(value.slice(1),16);return[(n>>16)&255,(n>>8)&255,n&255];};
+    const parse=value=>{
+      if(value.startsWith('#')) { const n=parseInt(value.slice(1),16); return[(n>>16)&255,(n>>8)&255,n&255]; }
+      const channels=value.match(/[\d.]+/g)?.slice(0,3).map(Number);
+      return channels?.length===3?channels:[128,128,128];
+    };
     const a=parse(hex),b=parse(target),m=Math.max(0,Math.min(1,amount));
     return `rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*m)).join(',')})`;
   }
