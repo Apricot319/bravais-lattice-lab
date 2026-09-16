@@ -264,8 +264,8 @@
     $('bravaisSystem').textContent=`${SYSTEM_NAMES[model.system]} · ${CENTER_NAMES[model.center]}`;
     $('confidenceValue').textContent=`${model.confidence||100}%`; $('confidenceBar').style.width=`${model.confidence||100}%`;
     $('cellVolume').textContent=formatNumber(model.volume); $('latticePoints').textContent=model.metrics.count;
-    $('neighborDistance').textContent=model.metrics.nearest?formatNumber(model.metrics.nearest):'—';
-    $('packingFraction').textContent=model.metrics.packing==null?'—':formatNumber(model.metrics.packing*100,1);
+    $('neighborDistance').textContent=model.metrics.nearest?formatNumber(model.metrics.nearest):'暂无';
+    $('packingFraction').textContent=model.metrics.packing==null?'暂无':formatNumber(model.metrics.packing*100,1);
     $('packingUnit').textContent=model.metrics.packing==null?'':'%';
     updateCoordination(model); updateSymmetrySummary(model);
     if(model.kind==='structure') $('structureNote').textContent='当前模板显示晶体的完整基元；离子晶体的堆积率取决于离子半径，因此不作唯一数值估算。';
@@ -283,7 +283,7 @@
     a.forEach(x=>groups[`C${x.order}`]=(groups[`C${x.order}`]||0)+1);
     const parts=Object.entries(groups).map(([k,v])=>`<button type="button" data-sym="axis" data-order="${k.slice(1)}">${k.replace(/(\d)/,c=>'₀₁₂₃₄₅₆₇₈₉'[+c])} ×${v}</button>`);
     if(p.length) parts.push(`<button type="button" data-sym="plane">m ×${p.length}</button>`);
-    $('symmetryTags').innerHTML=parts.length?parts.join(''):'<span class="eyebrow">仅有反心（无旋转轴或镜面）</span>';
+    $('symmetryTags').innerHTML=parts.length?parts.join(''):'<span class="symmetry-empty">仅有反心（无旋转轴或镜面）</span>';
     $('symmetryCount').textContent=`${a.length+p.length} 个`;
     $('symmetryHint').textContent=parts.length?'在视图中点击彩色轴或镜面，即可执行对应的对称操作。':'三斜 Bravais 格子的点群为 1̄；反心未单独绘制。';
     $('symmetryTags').querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
@@ -291,7 +291,7 @@
     }));
   }
 
-  function formatNumber(n,d=2){ if(!Number.isFinite(n)) return '—'; if(Math.abs(n)>=1000) return n.toFixed(0); if(Math.abs(n)>=100) return n.toFixed(1); return n.toFixed(d); }
+  function formatNumber(n,d=2){ if(!Number.isFinite(n)) return '暂无'; if(Math.abs(n)>=1000) return n.toFixed(0); if(Math.abs(n)>=100) return n.toFixed(1); return n.toFixed(d); }
   function showToast(message,error=false){ const t=$('toast'); clearTimeout(state.toastTimer); t.textContent=message; t.style.borderColor=error?'rgba(251,113,133,.45)':''; t.classList.add('show'); state.toastTimer=setTimeout(()=>t.classList.remove('show'),2400); }
 
   function resize() {
@@ -374,8 +374,8 @@
   canvas.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();if(e.key==='ArrowLeft')state.yaw-=.1;if(e.key==='ArrowRight')state.yaw+=.1;if(e.key==='ArrowUp')state.pitch-=.1;if(e.key==='ArrowDown')state.pitch+=.1;}if(e.key==='+'||e.key==='=')state.zoom=Math.min(2.2,state.zoom*1.1);if(e.key==='-')state.zoom=Math.max(.48,state.zoom/1.1);});
 
   function populateUI() {
-    $('templateSelect').innerHTML=`<option value="custom">自定义参数</option><optgroup label="14 种布拉维格子">${BRAVAIS.map(x=>`<option value="${x.id}">${x.code} · ${x.name} · ${x.example}</option>`).join('')}</optgroup><optgroup label="经典结构（完整基元）">${STRUCTURES.map(x=>`<option value="${x.id}">${x.name} · ${x.example}</option>`).join('')}</optgroup>`;
-    $('templateGrid').innerHTML=BRAVAIS.map(x=>`<button type="button" class="template-card" data-id="${x.id}"><span>${x.code}</span><b>${x.name}</b><small>${SYSTEM_NAMES[x.system]} · 代表：${x.example}</small></button>`).join('');
+    $('templateSelect').innerHTML=`<option value="custom">自定义参数</option><optgroup label="14 种布拉维格子">${BRAVAIS.map(x=>`<option value="${x.id}">${x.code} ${x.name}（${x.example}）</option>`).join('')}</optgroup><optgroup label="经典结构（完整基元）">${STRUCTURES.map(x=>`<option value="${x.id}">${x.name}（${x.example}）</option>`).join('')}</optgroup>`;
+    $('templateGrid').innerHTML=BRAVAIS.map(x=>`<button type="button" class="template-card" data-id="${x.id}"><span class="template-code">${x.code}</span><b>${x.name}</b><small>${SYSTEM_NAMES[x.system]} · 代表：${x.example}</small></button>`).join('');
     $('templateGrid').querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{loadPreset(btn.dataset.id,true);$('templateDialog').close();}));
   }
 
