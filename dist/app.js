@@ -451,7 +451,8 @@
       }
     }
     if($('toggleAxes').checked) for(const el of model.symmetry.axes) {
-      const a=V.scale(el.dir,-L),b=V.scale(el.dir,L),hovered=state.hover===el,[p,q]=line(a,b,hovered?'rgba(183,128,26,.98)':'rgba(100,83,154,.78)',hovered?3:1.8,[7,5]);
+      const axisL=el.order===3?L*1.24:L;
+      const a=V.scale(el.dir,-axisL),b=V.scale(el.dir,axisL),hovered=state.hover===el,[p,q]=line(a,b,hovered?'rgba(183,128,26,.98)':'rgba(100,83,154,.78)',hovered?3:1.8,[7,5]);
       ctx.save();const symbolColor=hovered?'#a96f12':'#65549a';drawAxisSymbol(p,el.order,symbolColor,false,hovered);drawAxisSymbol(q,el.order,symbolColor,false,hovered);ctx.restore();
       state.hitAreas.push({el,kind:'axis',a:p,b:q});
     }
